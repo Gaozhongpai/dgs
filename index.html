@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="dGS / dBS: Direct Conditional Parameterization for N-Dimensional Splatting. A kernel-agnostic drop-in replacement for covariance-derived conditioning, 6.9-7.7x faster slicing. NeurIPS 2026.">
+  <meta property="og:title" content="dGS / dBS (NeurIPS 2026)" />
+  <meta property="og:description" content="Direct Conditional Parameterization for N-Dimensional Splatting" />
+  <meta property="og:url" content="https://gaozhongpai.github.io/dgs/" />
+  <meta property="og:image" content="static/images/dgs.webp" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+
+  <meta name="twitter:title" content="dGS / dBS (NeurIPS 2026)">
+  <meta name="twitter:description" content="Direct Conditional Parameterization for N-Dimensional Splatting">
+  <meta name="twitter:image" content="static/images/dgs.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="keywords" content="dGS, dBS, N-dimensional splatting, Gaussian Splatting, Beta Splatting, 6DGS, 7DGS, UBS, conditional slicing, NeurIPS 2026">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Direct Conditional Parameterization for N-Dimensional Splatting (NeurIPS 2026)</title>
+  <link rel="icon" type="image/webp" href="static/images/dgs.webp">
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Bulma -->
+  <link rel="stylesheet" href="static/css/bulma.min.css">
+  <link rel="stylesheet" href="static/css/index.css">
+
+  <!-- NDSplat theme (loaded last so it wins the cascade) -->
+  <link rel="stylesheet" href="static/css/ndsplat-theme.css">
+  <script defer src="static/js/ndsplat-nav.js"></script>
+
+  <style>
+    /* dGS-specific accents on top of the NDSplat theme */
+    .mname em { font-style: italic; margin-right: .04em; }
+    .dg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:1.4rem}
+    @media (max-width:768px){.dg-grid{grid-template-columns:1fr}}
+    .dg-card{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:#fff;box-shadow:var(--shadow)}
+    .dg-card h4{margin:0 0 .35rem;font-size:1.0rem;font-weight:700;color:var(--ink)}
+    .dg-card p{margin:0;font-size:.9rem;color:var(--ink-soft);line-height:1.5}
+    .dg-card .tag-line{font-family:var(--nd-mono);font-size:.72rem;letter-spacing:.06em;
+      text-transform:uppercase;color:var(--accent-ink);margin-bottom:.45rem}
+
+    .dg-eq{margin-top:1.8rem;border:1px solid var(--line);border-radius:var(--radius);background:#fff;
+      padding:20px 24px;box-shadow:var(--shadow)}
+    .dg-eq-label{color:var(--ink-soft);font-size:.95rem;margin-bottom:.8rem}
+    .dg-eq-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media (max-width:768px){.dg-eq-row{grid-template-columns:1fr}}
+    .dg-eq-item{background:var(--bg-alt);border-radius:var(--radius-sm);padding:12px 14px;overflow-x:auto}
+    .dg-eq-item .eq-tag{display:block;font-size:.7rem;font-weight:700;text-transform:uppercase;
+      letter-spacing:.08em;color:var(--ink-faint);margin-bottom:.35rem}
+    .dg-eq-item code{background:transparent;color:var(--ink);font-family:var(--nd-mono);font-size:.92rem;padding:0;white-space:nowrap}
+    .dg-eq-note{margin-top:.9rem;font-size:.9rem;color:var(--ink-soft);line-height:1.6}
+    .dg-eq-note code{background:transparent;color:var(--ink);font-family:var(--nd-mono);font-size:.85rem;padding:0}
+
+    .dg-cap{color:var(--ink-soft);max-width:820px;margin:0 auto 1.2rem}
+    .dg-note{color:var(--ink-faint);font-size:.85rem;margin-top:.8rem}
+    .rfm-metrics td.c-ds{text-align:left;font-weight:600;vertical-align:middle;background:#fff}
+    .rfm-metrics td.c-ds small{display:block;font-weight:500;color:var(--ink-faint);font-size:.72rem;
+      text-transform:uppercase;letter-spacing:.06em;margin-top:.2rem}
+    .rfm-metrics tr.dg-block td{border-top:3px solid #11131e}
+    .rfm-metrics tr.dg-dash td{border-top:1px dashed #b9bfcf}
+    .rfm-metrics td.second{text-decoration:underline;text-underline-offset:3px}
+    .rfm-metrics th.sep, .rfm-metrics td.sep{border-left:1px solid var(--line)}
+    .rfm-metrics td.c-type{text-align:left;font-weight:600;vertical-align:middle;background:#fff}
+    .rfm-metrics td.c-name{text-align:left}
+
+    .nd-hero .button.is-static-soon{opacity:.6;cursor:default;pointer-events:none}
+  </style>
+</head>
+
+<body>
+
+  <!-- ============ NDSplat NAV ============ -->
+  <header class="nd-nav" id="ndNav">
+    <div class="nd-nav-inner">
+      <a class="nd-brand" href="https://gaozhongpai.github.io/ndsplat/"><span class="mk">ND</span>Splat</a>
+      <nav class="nd-nav-links">
+        <a href="https://gaozhongpai.github.io/6dgs/">6DGS</a>
+        <a href="https://gaozhongpai.github.io/7dgs/">7DGS</a>
+        <a href="https://rongliu-leo.github.io/universal-beta-splatting/">UBS</a>
+        <a href="https://gaozhongpai.github.io/dgs/" class="current">dGS / dBS</a>
+        <a href="https://gaozhongpai.github.io/renderfm/">Render-FM</a>
+        <a href="https://gaozhongpai.github.io/XClipGS/">XClipGS</a>
+      </nav>
+      <button class="nd-nav-toggle" id="ndNavToggle" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ======================= HERO ======================= -->
+  <section class="hero nd-hero">
+    <div class="nd-hero-bg" aria-hidden="true"></div>
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <span class="nd-venue"><span class="dot"></span>NeurIPS 2026</span>
+            <h1 class="title is-1 publication-title">Direct Conditional Parameterization for N-Dimensional Splatting</h1>
+
+            <div class="is-size-5 publication-authors">
+              <!-- Author order as on OpenReview (NeurIPS 2026 poster) -->
+              <span class="author-block">
+                <a href="https://sites.google.com/site/gaozhongpai/home" target="_blank">Zhongpai Gao</a>,</span>
+              <span class="author-block">
+                <a href="https://planche.me/" target="_blank">Benjamin Planche</a>,</span>
+              <span class="author-block">
+                <a href="https://nv-nguyen.github.io/" target="_blank">Van Nguyen Nguyen</a>,</span>
+              <span class="author-block">
+                <a href="https://mzhengrpi.github.io/" target="_blank">Meng Zheng</a>,</span>
+              <span class="author-block">
+                <a href="https://scholar.google.com/citations?user=KQnKUHKGFdUC&hl=en" target="_blank">Anwesa Choudhuri</a>,</span>
+              <span class="author-block">
+                <a href="https://scholar.google.com/citations?user=uFVI8zIAAAAJ&hl=en" target="_blank">Arun Innanje</a>,</span>
+              <span class="author-block">
+                <a href="https://scholar.google.com/citations?user=S2BT6ogAAAAJ&hl=en" target="_blank">Terrence Chen</a>,</span>
+              <span class="author-block">
+                <a href="https://wuziyan.com/" target="_blank">Ziyan Wu</a></span>
+            </div>
+
+            <div class="is-size-5 publication-authors">
+              <span class="author-block">United Imaging Intelligence, Boston, MA, USA</span>
+            </div>
+
+            <div class="column has-text-centered">
+              <div class="publication-links">
+                <!-- TODO: point these at the OpenReview forum / arXiv / code release once public -->
+                <span class="link-block">
+                  <a class="external-link button is-normal is-rounded is-dark is-static-soon" aria-disabled="true">
+                    <span class="icon">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M224 136V0H24C10.7 0 0 10.7 0 24v464c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H248c-13.2 0-24-10.8-24-24zm76.45 211.36l-96.42 95.7c-6.65 6.61-17.39 6.61-24.04 0l-96.42-95.7C73.42 337.29 80.54 320 94.82 320H160v-80c0-8.84 7.16-16 16-16h32c8.84 0 16 7.16 16 16v80h65.18c14.28 0 21.4 17.29 10.27 27.36zM377 105L279.1 7c-4.5-4.5-10.6-7-17-7H256v128h128v-6.1c0-6.3-2.5-12.4-7-16.9z"/></svg>
+                    </span>
+                    <span>Paper (soon)</span>
+                  </a>
+                </span>
+                <span class="link-block">
+                  <a class="external-link button is-normal is-rounded is-dark is-static-soon" aria-disabled="true">
+                    <span class="icon">
+                      <svg viewBox="0 0 16 16" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+                    </span>
+                    <span>Code (soon)</span>
+                  </a>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= STAT STRIP ======================= -->
+  <div class="nd-stats">
+    <div class="nd-stat"><div class="num">7.7&times;</div><div class="lbl">Faster conditional slicing</div></div>
+    <div class="nd-stat"><div class="num">2.66&times;</div><div class="lbl">Faster end-to-end rendering</div></div>
+    <div class="nd-stat"><div class="num">+1.26 dB</div><div class="lbl">Top PSNR gain (7DGS-PBR)</div></div>
+  </div>
+
+  <!-- ======================= TEASER ======================= -->
+  <section class="hero teaser nd-reveal">
+    <div class="container is-max-desktop">
+      <div class="hero-body">
+        <img src="static/images/teaser.jpg" alt="dGS vs. 6DGS on the bicycle scene and dBS vs. UBS on the dynamic heart scene" style="height:100%;width:100%;">
+        <h2 class="subtitle has-text-centered">
+          Direct conditioning improves both kernels. <b><span class="mname"><em>d</em>GS</span></b> beats 6DGS on the static
+          <code>bicycle</code> scene (+1.18&nbsp;dB, 1.7&times; FPS), and <b><span class="mname"><em>d</em>BS</span></b> beats UBS
+          on the dynamic cardiac <code>heart1</code> scene (+2.06&nbsp;dB, 1.4&times; FPS).
+        </h2>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= ABSTRACT ======================= -->
+  <section class="section hero is-light nd-reveal">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-four-fifths">
+          <h2 class="title is-3">Abstract</h2>
+          <div class="content has-text-justified">
+            <p>
+              N-dimensional splatting extends 3D Gaussian Splatting with conditioning variables such as view direction
+              and time to model view-dependent and dynamic effects. Each primitive is lifted into a joint distribution
+              over 3D position and conditioning variables, and at render time is <i>conditionally sliced</i> at the query
+              to recover a 3D primitive whose mean, opacity, and covariance vary continuously with view or time.
+            </p>
+            <p>
+              N-DGS (covering 6DGS and 7DGS) and UBS together represent the leading N-dimensional splatting formulations
+              across Gaussian and Beta kernels, but share the same conditional-slicing step: all three effects are derived
+              from the joint covariance matrix per primitive in every forward pass, requiring matrix inversions and
+              regression-matrix multiplications that scale with primitive count. The conditional-slicing step is
+              kernel-agnostic, so a single improvement carries across families.
+            </p>
+            <p>
+              We introduce <b>direct conditional parameterization</b>, replacing the covariance-derived form with explicit
+              per-effect parameters: a <b>Cholesky precision factor</b> for opacity and a <b>displacement matrix with
+              learnable per-dimension coupling</b> for position. Applied to both kernels, the parameterization yields
+              <span class="mname"><em>d</em>GS</span> (Gaussian) and <span class="mname"><em>d</em>BS</span> (Beta). Across
+              five static and dynamic benchmarks, <span class="mname"><em>d</em>GS</span> and
+              <span class="mname"><em>d</em>BS</span> match or exceed their covariance-derived counterparts on quality (up
+              to <b>+1.26&nbsp;dB</b> in the main MCMC evaluation) while running <b>6.9&ndash;7.7&times; faster</b> at the
+              slicing step and up to <b>2.66&times; faster</b> end-to-end rendering. Direct conditioning is a
+              kernel-agnostic drop-in replacement for covariance-derived conditioning in N-dimensional splatting.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= METHOD ======================= -->
+  <section class="section nd-reveal">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column is-full-width">
+          <h2 class="title is-3 has-text-centered">How It Works</h2>
+          <p class="content has-text-centered dg-cap">
+            Rendering only needs three things from a joint primitive: the query precision, the query-to-position
+            regression, and the conditional spatial covariance. We parameterize them <b>directly</b> instead of deriving
+            them from an ambient joint covariance through inversion and Schur complements.
+          </p>
+          <img src="static/images/pipeline.jpg" alt="dGS pipeline: direct precision opacity decay, learnable coupling control, and spatially scaled coupling factor" style="width:100%;">
+
+          <div class="dg-grid">
+            <div class="dg-card">
+              <div class="tag-line">Opacity &middot; L</div>
+              <h4>Direct precision factor</h4>
+              <p>A lower-triangular Cholesky factor makes V<sub>qq</sub> = LL<sup>&top;</sup> the precision itself.
+                 Opacity is one triangular product and a squared norm, with no inversion.</p>
+            </div>
+            <div class="dg-card">
+              <div class="tag-line">Coupling &middot; &Lambda;</div>
+              <h4>Learnable per-dimension coupling</h4>
+              <p>&Lambda; &isin; [0,1]<sup>C</sup> decides how much each query dimension moves the mean.
+                 0 decouples position from opacity; 1 recovers full N-DGS-style coupling.</p>
+            </div>
+            <div class="dg-card">
+              <div class="tag-line">Position &middot; V<sub>pq</sub></div>
+              <h4>Spatially scaled coupling factor</h4>
+              <p>V<sub>pq</sub> = s&#772;&Theta;<sub>pq</sub> ties the shift to the primitive's mean scale.
+                 Removing this prior costs 2.65&ndash;2.97&nbsp;dB.</p>
+            </div>
+          </div>
+
+          <div class="dg-eq">
+            <p class="dg-eq-label">Direct conditioning, given the query deviation <i>&delta; = q &minus; &mu;<sub>q</sub></i>:</p>
+            <div class="dg-eq-row">
+              <div class="dg-eq-item">
+                <span class="eq-tag">Opacity</span>
+                <code>&alpha;<sub>cond</sub> = &alpha; &middot; exp( &minus;&lambda;<sub>o</sub> &middot; ‖ L<sup>&top;</sup>&delta; ‖² )</code>
+              </div>
+              <div class="dg-eq-item">
+                <span class="eq-tag">Position</span>
+                <code>&mu;<sub>cond</sub> = &mu;<sub>p</sub> + V<sub>pq</sub> &middot; diag(&Lambda;) &middot; V<sub>qq</sub> &middot; &delta;</code>
+              </div>
+            </div>
+            <p class="dg-eq-note">
+              The conditional covariance stays query-independent, as in 3DGS, so existing densification strategies carry
+              over unchanged. For the Beta kernel (<span class="mname"><em>d</em>BS</span>), the opacity decay becomes
+              <code>&prod;<sub>i</sub> (1 &minus; tanh(z<sub>i</sub>²))<sup>&beta;<sub>i</sub></sup></code> with
+              <i>z = L<sup>&top;</sup>&delta;</i>, and the same bandwidth &beta; supplies the coupling
+              &Lambda;<sub>&beta;</sub> = min(&beta;/4, 1). We also prove the unrestricted tuple is a smooth, globally
+              bijective coordinate chart for joint Gaussian covariances.
+            </p>
+          </div>
+
+          <h3 class="title is-4 has-text-centered" style="margin-top:3rem;">What the slicing step no longer computes</h3>
+          <div class="rfm-table-wrap">
+            <table class="rfm-metrics">
+              <thead>
+                <tr><th>Per-primitive operation</th><th>N-DGS</th><th>UBS</th><th><span class="mname"><em>d</em>GS</span></th><th><span class="mname"><em>d</em>BS</span></th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Invert &Sigma;<sub>qq</sub></td><td>&check;</td><td>&check;</td><td>&mdash;</td><td>&mdash;</td></tr>
+                <tr><td>Regression matrix &Sigma;<sub>pq</sub>&Sigma;<sub>qq</sub><sup>&minus;1</sup></td><td>&check;</td><td>&check;</td><td>&mdash;</td><td>&mdash;</td></tr>
+                <tr><td>Covariance correction</td><td>&check;</td><td>&check;</td><td>&mdash;</td><td>&mdash;</td></tr>
+                <tr class="dg-block"><td>Slicing time, C=3 (view)</td><td>0.71&nbsp;ms</td><td>0.67&nbsp;ms</td><td class="best">0.10&nbsp;ms (7.1&times;)</td><td class="best">0.10&nbsp;ms (6.9&times;)</td></tr>
+                <tr><td>Slicing time, C=4 (view + time)</td><td>0.96&nbsp;ms</td><td>1.34&nbsp;ms</td><td class="best">0.12&nbsp;ms (7.7&times;)</td><td class="best">0.13&nbsp;ms (7.2&times;)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="dg-note has-text-centered">Slicing-only CUDA forward pass, 1M Gaussians, NVIDIA A100. Speedups are over the covariance-derived counterpart.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= MCMC RESULTS ======================= -->
+  <section class="section hero is-light nd-reveal">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column is-full-width has-text-centered">
+          <h2 class="title is-3">Quantitative Results</h2>
+          <p class="content has-text-centered dg-cap">
+            MCMC densification with matched Gaussian budgets. Each direct method is paired with its covariance-derived
+            counterpart, so any difference reflects the conditioning parameterization alone.
+          </p>
+          <div class="rfm-table-wrap">
+            <table class="rfm-metrics">
+              <thead>
+                <tr>
+                  <th>Dataset</th><th>Method</th>
+                  <th>#Gauss&nbsp;(K)</th><th>Time&nbsp;(m)&darr;</th>
+                  <th>FPS&uarr;</th><th>FPS<sub>CUDA</sub>&uarr;</th>
+                  <th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td class="c-ds" rowspan="4">NeRF Synthetic<small>static</small></td><td>N-DGS</td><td>300</td><td>10.43</td><td>183.58</td><td>348.95</td><td>34.04</td><td>0.973</td><td>0.027</td></tr>
+                <tr class="rfm-ours"><td><span class="mname"><em>d</em>GS</span></td><td>300</td><td class="best">10.26</td><td class="best">245.18</td><td class="best">593.94</td><td class="best">34.34</td><td class="best">0.973</td><td class="best">0.026</td></tr>
+                <tr class="dg-dash"><td>UBS</td><td>300</td><td>6.80</td><td>155.96</td><td>306.33</td><td>34.48</td><td>0.975</td><td>0.026</td></tr>
+                <tr class="rfm-ours"><td><span class="mname"><em>d</em>BS</span></td><td>300</td><td class="best">5.48</td><td class="best">239.09</td><td class="best">415.66</td><td class="best">34.53</td><td class="best">0.975</td><td class="best">0.025</td></tr>
+
+                <tr class="dg-block"><td class="c-ds" rowspan="4">Mip-NeRF 360<small>static</small></td><td>N-DGS</td><td>2,852</td><td>51.23</td><td>35.69</td><td>75.31</td><td>26.88</td><td>0.775</td><td>0.263</td></tr>
+                <tr class="rfm-ours"><td><span class="mname"><em>d</em>GS</span></td><td>2,574</td><td class="best">49.85</td><td class="best">42.49</td><td class="best">200.56</td><td class="best">27.67</td><td class="best">0.794</td><td class="best">0.227</td></tr>
+                <tr class="dg-dash"><td>UBS</td><td>3,057</td><td>28.59</td><td>40.94</td><td>76.18</td><td>28.50</td><td>0.841</td><td class="best">0.183</td></tr>
+                <tr class="rfm-ours"><td><span class="mname"><em>d</em>BS</span></td><td>3,057</td><td class="best">24.42</td><td class="best">62.05</td><td class="best">157.45</td><td class="best">28.70</td><td class="best">0.842</td><td>0.185</td></tr>
+
+                <tr class="dg-block"><td class="c-ds" rowspan="4">6DGS-PBR<small>static</small></td><td>N-DGS</td><td>163</td><td>54.80</td><td>328.75</td><td>476.79</td><td>40.06</td><td>0.976</td><td>0.039</td></tr>
+                <tr class="rfm-ours"><td><span class="mname"><em>d</em>GS</span></td><td>163</td><td class="best">47.54</td><td class="best">356.15</td><td class="best">551.02</td><td class="best">40.34</td><td class="best">0.976</td><td class="best">0.038</td></tr>
+                <tr class="dg-dash"><td>UBS</td><td>163</td><td>8.70</td><td>239.87</td><td>348.63</td><td>39.53</td><td>0.975</td><td>0.042</td></tr>
+                <tr class="rfm-ours"><td><span class="mname"><em>d</em>BS</span></td><td>163</td><td class="best">8.47</td><td class="best">305.33</td><td class="best">401.93</td><td class="best">39.72</td><td class="best">0.976</td><td class="best">0.042</td></tr>
+
+                <tr class="dg-block"><td class="c-ds" rowspan="4">D-NeRF<small>dynamic</small></td><td>N-DGS</td><td>150</td><td class="best">10.31</td><td>306.51</td><td>501.52</td><td>34.63</td><td>0.976</td><td>0.033</td></tr>
+                <tr class="rfm-ours"><td><span class="mname"><em>d</em>GS</span></td><td>150</td><td>10.61</td><td class="best">407.40</td><td class="best">746.65</td><td class="best">34.64</td><td class="best">0.976</td><td class="best">0.030</td></tr>
+                <tr class="dg-dash"><td>UBS</td><td>150</td><td class="best">8.37</td><td>229.83</td><td>371.81</td><td>32.91</td><td>0.967</td><td>0.040</td></tr>
+                <tr class="rfm-ours"><td><span class="mname"><em>d</em>BS</span></td><td>150</td><td>9.34</td><td class="best">323.75</td><td class="best">463.09</td><td class="best">33.55</td><td class="best">0.972</td><td class="best">0.033</td></tr>
+
+                <tr class="dg-block"><td class="c-ds" rowspan="4">7DGS-PBR<small>dynamic</small></td><td>N-DGS</td><td>175</td><td class="best">28.44</td><td>294.48</td><td>511.12</td><td>29.20</td><td>0.944</td><td>0.063</td></tr>
+                <tr class="rfm-ours"><td><span class="mname"><em>d</em>GS</span></td><td>175</td><td>31.12</td><td class="best">366.06</td><td class="best">577.38</td><td class="best">29.90</td><td class="best">0.948</td><td class="best">0.061</td></tr>
+                <tr class="dg-dash"><td>UBS</td><td>175</td><td>9.90</td><td>232.17</td><td>396.33</td><td>30.61</td><td>0.951</td><td>0.057</td></tr>
+                <tr class="rfm-ours"><td><span class="mname"><em>d</em>BS</span></td><td>175</td><td class="best">8.79</td><td class="best">347.93</td><td class="best">539.57</td><td class="best">31.87</td><td class="best">0.955</td><td class="best">0.053</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="dg-note">
+            Means over all scenes. FPS uses a PyTorch reference slicer; FPS<sub>CUDA</sub> uses the fused CUDA slicing
+            kernel. Bold = better of each pair. All methods: NVIDIA A100, 30K iterations, TC-GS rasterizer, identical
+            learning rates and densification schedules per dataset.
+          </p>
+
+          <!-- ---------- SOTA ---------- -->
+          <h3 class="title is-4 has-text-centered" style="margin-top:3.2rem;">Comparison with state-of-the-art static-scene methods</h3>
+          <p class="content has-text-centered dg-cap">
+            <span class="mname"><em>d</em>BS</span> achieves the best PSNR on Mip-NeRF&nbsp;360 (28.70&nbsp;dB) and ties
+            for best PSNR on NeRF&nbsp;Synthetic (34.53&nbsp;dB). UBS and <span class="mname"><em>d</em>BS</span> are
+            re-evaluated under the 3DGS protocol, so UBS numbers differ from the original paper.
+          </p>
+          <div class="rfm-table-wrap">
+            <table class="rfm-metrics">
+              <thead>
+                <tr>
+                  <th rowspan="2"></th><th rowspan="2">Method</th>
+                  <th colspan="3" style="text-align:center;">Mip-NeRF 360</th>
+                  <th colspan="3" class="sep" style="text-align:center;">NeRF Synthetic</th>
+                </tr>
+                <tr>
+                  <th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th>
+                  <th class="sep">PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td class="c-type" rowspan="3">Implicit</td><td class="c-name">Instant-NGP</td>
+                  <td>25.51</td><td>0.684</td><td>0.398</td><td class="sep">33.18</td><td>0.959</td><td>0.055</td></tr>
+                <tr><td class="c-name">Mip-NeRF 360</td>
+                  <td>27.69</td><td>0.792</td><td>0.237</td><td class="sep">33.25</td><td>0.962</td><td>0.039</td></tr>
+                <tr><td class="c-name">Zip-NeRF</td>
+                  <td>28.54</td><td>0.828</td><td>0.189</td><td class="sep">33.10</td><td>0.971</td><td>0.031</td></tr>
+
+                <tr class="dg-block"><td class="c-type" rowspan="14">Explicit</td><td class="c-name">3DGS</td>
+                  <td>27.20</td><td>0.815</td><td>0.214</td><td class="sep">33.31</td><td>0.969</td><td>0.037</td></tr>
+                <tr><td class="c-name">GES</td>
+                  <td>26.91</td><td>0.794</td><td>0.250</td><td class="sep">&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+                <tr><td class="c-name">2DGS</td>
+                  <td>27.04</td><td>0.805</td><td>0.297</td><td class="sep">33.07</td><td>&ndash;</td><td>&ndash;</td></tr>
+                <tr><td class="c-name">Mip-Splatting</td>
+                  <td>27.79</td><td>0.827</td><td>0.203</td><td class="sep">33.33</td><td>0.969</td><td>0.039</td></tr>
+                <tr><td class="c-name">3DGS-MCMC</td>
+                  <td>28.29</td><td>0.840</td><td>0.210</td><td class="sep">33.80</td><td>0.970</td><td>0.040</td></tr>
+                <tr><td class="c-name">DRKS</td>
+                  <td>26.76</td><td>0.787</td><td>0.236</td><td class="sep">33.82</td><td>&ndash;</td><td>&ndash;</td></tr>
+                <tr><td class="c-name">Textured GS</td>
+                  <td>27.35</td><td>0.827</td><td>0.186</td><td class="sep">33.24</td><td>0.967</td><td>0.043</td></tr>
+                <tr><td class="c-name">Quadratic GS</td>
+                  <td>27.39</td><td>0.813</td><td>0.213</td><td class="sep">&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+                <tr><td class="c-name">Disc-GS</td>
+                  <td>28.01</td><td>0.833</td><td>0.189</td><td class="sep">&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+                <tr><td class="c-name">Triangle Splatting</td>
+                  <td>27.00</td><td>0.808</td><td>0.231</td><td class="sep">&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+                <tr><td class="c-name">Radiance Meshes</td>
+                  <td>27.15</td><td>0.810</td><td>0.274</td><td class="sep">&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+                <tr><td class="c-name">Spherical Voronoi</td>
+                  <td class="second">28.57</td><td>0.835</td><td>0.230</td><td class="sep best">34.53</td><td class="second">0.973</td><td>0.032</td></tr>
+                <tr><td class="c-name">UBS</td>
+                  <td>28.50</td><td class="second">0.841</td><td class="best">0.183</td><td class="sep second">34.48</td><td class="best">0.975</td><td class="second">0.026</td></tr>
+                <tr class="rfm-ours"><td class="c-name"><span class="mname"><em>d</em>BS</span> (Ours)</td>
+                  <td class="best">28.70</td><td class="best">0.842</td><td class="second">0.185</td><td class="sep best">34.53</td><td class="best">0.975</td><td class="best">0.025</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="dg-note">Bold = best, underline = second best.</p>
+
+          <!-- ---------- Ablation ---------- -->
+          <h3 class="title is-4 has-text-centered" style="margin-top:3.2rem;">Ablation: coupling and spatial scaling</h3>
+          <p class="content has-text-centered dg-cap">
+            Learned &Lambda; beats both fixed extremes. Diffuse scenes prefer weak coupling and specular scenes prefer
+            strong coupling, so the right amount is scene- and primitive-dependent.
+          </p>
+          <div class="rfm-table-wrap">
+            <table class="rfm-metrics">
+              <thead>
+                <tr>
+                  <th rowspan="2">Config</th>
+                  <th colspan="3" style="text-align:center;">NeRF Synthetic</th>
+                  <th colspan="3" class="sep" style="text-align:center;">6DGS-PBR</th>
+                </tr>
+                <tr>
+                  <th>PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th>
+                  <th class="sep">PSNR&uarr;</th><th>SSIM&uarr;</th><th>LPIPS&darr;</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>&Lambda; = 0 (<span class="mname"><em>d</em>GS</span>-O, opacity only)</td><td>33.84</td><td>0.971</td><td>0.030</td><td class="sep">36.54</td><td>0.965</td><td>0.059</td></tr>
+                <tr><td>&Lambda; = 1 (fixed full coupling)</td><td>33.78</td><td>0.971</td><td>0.029</td><td class="sep">37.31</td><td class="best">0.972</td><td>0.053</td></tr>
+                <tr><td><span class="mname"><em>d</em>GS</span> w/o spatial scaling s&#772;</td><td>31.26</td><td>0.957</td><td>0.046</td><td class="sep">34.78</td><td>0.951</td><td>0.075</td></tr>
+                <tr class="rfm-ours"><td>Learned &Lambda; (<span class="mname"><em>d</em>GS</span>)</td><td class="best">33.91</td><td class="best">0.972</td><td class="best">0.029</td><td class="sep best">37.75</td><td class="best">0.972</td><td class="best">0.052</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="dg-note">Standard 3DGS densification. An unscaled coupling factor is worse than no position regression at all.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= QUALITATIVE ======================= -->
+  <section class="section nd-reveal">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered">Qualitative Comparison</h2>
+      <img src="static/images/qualitative.jpg" alt="Qualitative comparison on static and dynamic scenes" style="width:100%;">
+      <p class="content has-text-justified" style="margin-top:.8rem;">
+        Static and dynamic scenes. <span class="mname"><em>d</em>GS</span> shows noticeably fewer artifacts than N-DGS
+        on static scenes. On dynamic scenes, <span class="mname"><em>d</em>GS</span> and
+        <span class="mname"><em>d</em>BS</span> both look better than their covariance-derived counterparts.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ RELATED WORK (cross-reference network) ============ -->
+  <section class="section nd-related nd-reveal">
+    <div class="container is-max-desktop">
+      <h2 class="title is-3 has-text-centered" style="margin-bottom: 2rem;">The N-Dimensional Splatting Line</h2>
+      <div class="nd-related-grid">
+        <a class="nd-rel" href="https://gaozhongpai.github.io/6dgs/">
+          <span class="nd-rel-venue">ICLR 2025</span>
+          <span class="nd-rel-name">6DGS</span>
+          <span class="nd-rel-desc">Direction-aware 6D Gaussians for view-dependent volumetric rendering.</span>
+        </a>
+        <a class="nd-rel" href="https://gaozhongpai.github.io/7dgs/">
+          <span class="nd-rel-venue">ICCV 2025</span>
+          <span class="nd-rel-name">7DGS</span>
+          <span class="nd-rel-desc">Unified spatial-temporal-angular Gaussians for dynamic, view-dependent scenes.</span>
+        </a>
+        <a class="nd-rel" href="https://rongliu-leo.github.io/universal-beta-splatting/">
+          <span class="nd-rel-venue">ICLR 2026</span>
+          <span class="nd-rel-name">UBS</span>
+          <span class="nd-rel-desc">Universal Beta Splatting: anisotropic Beta kernels across space, angle, and time.</span>
+        </a>
+        <a class="nd-rel is-self">
+          <span class="nd-rel-venue">NeurIPS 2026</span>
+          <span class="nd-rel-name"><em class="tight">d</em>GS / <em class="tight">d</em>BS</span>
+          <span class="nd-rel-desc">Direct conditional parameterization &mdash; kernel-agnostic, up to 7.7&times; faster slicing.</span>
+        </a>
+        <a class="nd-rel" href="https://gaozhongpai.github.io/renderfm/">
+          <span class="nd-rel-venue">ECCV 2026</span>
+          <span class="nd-rel-name">Render-FM</span>
+          <span class="nd-rel-desc">Feedforward 6DGS for medical CT &mdash; 500&times; faster than per-scan optimization.</span>
+        </a>
+        <a class="nd-rel" href="https://gaozhongpai.github.io/XClipGS/">
+          <span class="nd-rel-venue">arXiv</span>
+          <span class="nd-rel-name">XClipGS</span>
+          <span class="nd-rel-desc">Exact, training-free half-space clipping with clip-aware interior supervision.</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= BIBTEX ======================= -->
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <h2 class="title">BibTeX</h2>
+      <pre><code>@inproceedings{gao2026direct,
+  title     = {Direct Conditional Parameterization for N-Dimensional Splatting},
+  author    = {Gao, Zhongpai and Planche, Benjamin and Nguyen, Van Nguyen and Zheng, Meng and
+               Choudhuri, Anwesa and Innanje, Arun and Chen, Terrence and Wu, Ziyan},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2026}
+}</code></pre>
+    </div>
+  </section>
+
+  <!-- ======================= FOOTER ======================= -->
+  <footer class="footer">
+    <div class="container">
+      <div class="columns is-centered">
+        <div class="column is-8">
+          <div class="content has-text-centered">
+            <p>
+              This page was built using the
+              <a href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank">Academic Project Page Template</a>,
+              adapted from the <a href="https://nerfies.github.io" target="_blank">Nerfies</a> project page.
+              Licensed under a
+              <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/" target="_blank">Creative
+                Commons Attribution-ShareAlike 4.0 International License</a>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</body>
+
+</html>
