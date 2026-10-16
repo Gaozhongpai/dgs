@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="description" content="dGS / dBS: Direct Conditional Parameterization for N-Dimensional Splatting. A kernel-agnostic drop-in replacement for covariance-derived conditioning, 6.9-7.7x faster slicing. NeurIPS 2026.">
+  <meta name="description" content="dGS / dBS: Direct Conditional Parameterization for N-Dimensional Splatting. A structured, kernel-agnostic approach with 6.9-7.7x faster production slicing and 1.25-1.91x complete-render speedups on four profiled scenes. NeurIPS 2026.">
   <meta property="og:title" content="dGS / dBS (NeurIPS 2026)" />
   <meta property="og:description" content="Direct Conditional Parameterization for N-Dimensional Splatting" />
   <meta property="og:url" content="https://gaozhongpai.github.io/dgs/" />
@@ -73,6 +73,7 @@
     .rfm-metrics td.c-name{text-align:left}
 
     .nd-hero .button.is-static-soon{opacity:.6;cursor:default;pointer-events:none}
+    @media (max-width:768px){.nd-stat .num.dg-speed-range{font-size:clamp(.95rem,4vw,1.45rem);white-space:nowrap}}
   </style>
 </head>
 
@@ -134,14 +135,14 @@
 
             <div class="column has-text-centered">
               <div class="publication-links">
-                <!-- TODO: point these at the OpenReview forum / arXiv / code release once public -->
+                <!-- Enable the arXiv link once the paper is publicly available. -->
                 <span class="link-block">
-                  <a class="external-link button is-normal is-rounded is-dark is-static-soon" aria-disabled="true">
+                  <button type="button" class="external-link button is-normal is-rounded is-dark is-static-soon" disabled aria-label="arXiv paper coming soon">
                     <span class="icon">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M224 136V0H24C10.7 0 0 10.7 0 24v464c0 13.3 10.7 24 24 24h336c13.3 0 24-10.7 24-24V160H248c-13.2 0-24-10.8-24-24zm76.45 211.36l-96.42 95.7c-6.65 6.61-17.39 6.61-24.04 0l-96.42-95.7C73.42 337.29 80.54 320 94.82 320H160v-80c0-8.84 7.16-16 16-16h32c8.84 0 16 7.16 16 16v80h65.18c14.28 0 21.4 17.29 10.27 27.36zM377 105L279.1 7c-4.5-4.5-10.6-7-17-7H256v128h128v-6.1c0-6.3-2.5-12.4-7-16.9z"/></svg>
                     </span>
-                    <span>Paper (soon)</span>
-                  </a>
+                    <span>arXiv (coming soon)</span>
+                  </button>
                 </span>
               </div>
             </div>
@@ -153,9 +154,9 @@
 
   <!-- ======================= STAT STRIP ======================= -->
   <div class="nd-stats">
-    <div class="nd-stat"><div class="num">7.7&times;</div><div class="lbl">Faster conditional slicing</div></div>
-    <div class="nd-stat"><div class="num">2.66&times;</div><div class="lbl">Faster end-to-end rendering</div></div>
-    <div class="nd-stat"><div class="num">+1.26 dB</div><div class="lbl">Top PSNR gain (7DGS-PBR)</div></div>
+    <div class="nd-stat"><div class="num">7.7&times;</div><div class="lbl">Peak production-slicing speedup</div></div>
+    <div class="nd-stat"><div class="num dg-speed-range">1.25&ndash;1.91&times;</div><div class="lbl">Measured complete-render speedup</div></div>
+    <div class="nd-stat"><div class="num">+1.26 dB</div><div class="lbl">PSNR gain on 7DGS-PBR</div></div>
   </div>
 
   <!-- ======================= TEASER ======================= -->
@@ -180,28 +181,26 @@
           <h2 class="title is-3">Abstract</h2>
           <div class="content has-text-justified">
             <p>
-              N-dimensional splatting extends 3D Gaussian Splatting with conditioning variables such as view direction
-              and time to model view-dependent and dynamic effects. Each primitive is lifted into a joint distribution
-              over 3D position and conditioning variables, and at render time is <i>conditionally sliced</i> at the query
-              to recover a 3D primitive whose mean, opacity, and covariance vary continuously with view or time.
+              N-dimensional splatting extends 3D Gaussian Splatting with view direction and time to model view-dependent
+              and dynamic effects. Each primitive is lifted into a joint distribution over position and conditioning
+              variables, then conditionally sliced at each rendering query. N-DGS and UBS share this step across Gaussian
+              and Beta kernels: recovering the conditional mean, opacity, and covariance requires per-primitive matrix
+              inversions and regression products in every forward pass.
             </p>
             <p>
-              N-DGS (covering 6DGS and 7DGS) and UBS together represent the leading N-dimensional splatting formulations
-              across Gaussian and Beta kernels, but share the same conditional-slicing step: all three effects are derived
-              from the joint covariance matrix per primitive in every forward pass, requiring matrix inversions and
-              regression-matrix multiplications that scale with primitive count. The conditional-slicing step is
-              kernel-agnostic, so a single improvement carries across families.
+              We introduce <b>direct conditional parameterization</b>, replacing this covariance-derived readout with
+              explicit per-effect parameters: a Cholesky precision factor for opacity and a factorized query-to-position
+              regression operator with learnable per-dimension coupling. Unrestricted conditional coordinates recover
+              a valid joint covariance; our factorization adds spatial-scale and coupling priors. Applied to both kernels,
+              the parameterization yields <span class="mname"><em>d</em>GS</span> (Gaussian) and
+              <span class="mname"><em>d</em>BS</span> (Beta).
             </p>
             <p>
-              We introduce <b>direct conditional parameterization</b>, replacing the covariance-derived form with explicit
-              per-effect parameters: a <b>Cholesky precision factor</b> for opacity and a <b>displacement matrix with
-              learnable per-dimension coupling</b> for position. Applied to both kernels, the parameterization yields
-              <span class="mname"><em>d</em>GS</span> (Gaussian) and <span class="mname"><em>d</em>BS</span> (Beta). Across
-              five static and dynamic benchmarks, <span class="mname"><em>d</em>GS</span> and
-              <span class="mname"><em>d</em>BS</span> match or exceed their covariance-derived counterparts on quality (up
-              to <b>+1.26&nbsp;dB</b> in the main MCMC evaluation) while running <b>6.9&ndash;7.7&times; faster</b> at the
-              slicing step and up to <b>2.66&times; faster</b> end-to-end rendering. Direct conditioning is a
-              kernel-agnostic drop-in replacement for covariance-derived conditioning in N-dimensional splatting.
+              Across five static and dynamic benchmarks, they match or exceed their covariance-derived counterparts on
+              quality, with gains up to <b>+1.26&nbsp;dB</b> in the main MCMC evaluation. Production slicing is
+              <b>6.9&ndash;7.7&times; faster</b> than on-the-fly covariance-derived conditioning; complete-render profiling
+              gives <b>1.25&ndash;1.91&times; speedups on four trained scenes</b>. Direct conditioning provides a structured,
+              kernel-agnostic alternative for N-dimensional splatting.
             </p>
           </div>
         </div>
@@ -232,13 +231,13 @@
             <div class="dg-card">
               <div class="tag-line">Coupling &middot; &Lambda;</div>
               <h4>Learnable per-dimension coupling</h4>
-              <p>&Lambda; &isin; [0,1]<sup>C</sup> decides how much each query dimension moves the mean.
-                 0 decouples position from opacity; 1 recovers full N-DGS-style coupling.</p>
+              <p>&Lambda; &isin; [0,1]<sup>C</sup> weights precision-transformed query channels.
+                 All-zero weights make position query-independent; all-one weights use the full opacity precision.</p>
             </div>
             <div class="dg-card">
               <div class="tag-line">Position &middot; V<sub>pq</sub></div>
               <h4>Spatially scaled coupling factor</h4>
-              <p>V<sub>pq</sub> = s&#772;&Theta;<sub>pq</sub> ties the shift to the primitive's mean scale.
+              <p>V<sub>pq</sub> = s&#772;&Theta;<sub>pq</sub> scales the coupling factor by the primitive's mean scale.
                  Removing this prior costs 2.65&ndash;2.97&nbsp;dB.</p>
             </div>
           </div>
@@ -280,7 +279,7 @@
               </tbody>
             </table>
           </div>
-          <p class="dg-note has-text-centered">Slicing-only CUDA forward pass, 1M Gaussians, NVIDIA A100. Speedups are over the covariance-derived counterpart.</p>
+          <p class="dg-note has-text-centered">Production slicing-only CUDA forward pass, 1M primitives, NVIDIA A100. Speedups compare optimized on-the-fly covariance-derived conditioning.</p>
         </div>
       </div>
     </div>
@@ -293,8 +292,8 @@
         <div class="column is-full-width has-text-centered">
           <h2 class="title is-3">Quantitative Results</h2>
           <p class="content has-text-centered dg-cap">
-            MCMC densification with matched Gaussian budgets. Each direct method is paired with its covariance-derived
-            counterpart, so any difference reflects the conditioning parameterization alone.
+            MCMC densification with matched per-scene primitive caps. Each direct method is paired with its
+            covariance-derived counterpart; the reported counts are the learned scene means.
           </p>
           <div class="rfm-table-wrap">
             <table class="rfm-metrics">
@@ -335,9 +334,10 @@
             </table>
           </div>
           <p class="dg-note">
-            Means over all scenes. FPS uses a PyTorch reference slicer; FPS<sub>CUDA</sub> uses the fused CUDA slicing
-            kernel. Bold = better of each pair. All methods: NVIDIA A100, 30K iterations, TC-GS rasterizer, identical
-            learning rates and densification schedules per dataset.
+            Scene means from one run per scene. FPS is an arithmetic scene mean using a PyTorch reference slicer;
+            FPS<sub>CUDA</sub> uses fused CUDA slicing. Bold = better of each pair. All methods: NVIDIA A100, 30K
+            iterations, TC-GS rasterizer, identical learning rates and densification schedules per dataset.
+            Separate profiling on four trained scenes gives 1.25&ndash;1.91&times; complete-render speedups.
           </p>
 
           <!-- ---------- SOTA ---------- -->
@@ -345,7 +345,8 @@
           <p class="content has-text-centered dg-cap">
             <span class="mname"><em>d</em>BS</span> achieves the best PSNR on Mip-NeRF&nbsp;360 (28.70&nbsp;dB) and ties
             for best PSNR on NeRF&nbsp;Synthetic (34.53&nbsp;dB). UBS and <span class="mname"><em>d</em>BS</span> are
-            re-evaluated under the 3DGS protocol, so UBS numbers differ from the original paper.
+            re-evaluated under the same 3DGS protocol, so UBS numbers differ from the original paper.
+            Other literature baselines retain their published protocols.
           </p>
           <div class="rfm-table-wrap">
             <table class="rfm-metrics">
@@ -384,12 +385,12 @@
                   <td>27.35</td><td>0.827</td><td>0.186</td><td class="sep">33.24</td><td>0.967</td><td>0.043</td></tr>
                 <tr><td class="c-name">Quadratic GS</td>
                   <td>27.39</td><td>0.813</td><td>0.213</td><td class="sep">&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
-                <tr><td class="c-name">Disc-GS</td>
+                <tr><td class="c-name">DisC-GS</td>
                   <td>28.01</td><td>0.833</td><td>0.189</td><td class="sep">&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
                 <tr><td class="c-name">Triangle Splatting</td>
-                  <td>27.00</td><td>0.808</td><td>0.231</td><td class="sep">&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+                  <td>27.16</td><td>0.814</td><td>0.191</td><td class="sep">&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
                 <tr><td class="c-name">Radiance Meshes</td>
-                  <td>27.15</td><td>0.810</td><td>0.274</td><td class="sep">&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
+                  <td>27.16</td><td>0.819</td><td>0.255</td><td class="sep">&ndash;</td><td>&ndash;</td><td>&ndash;</td></tr>
                 <tr><td class="c-name">Spherical Voronoi</td>
                   <td class="second">28.57</td><td>0.835</td><td>0.230</td><td class="sep best">34.53</td><td class="second">0.973</td><td>0.032</td></tr>
                 <tr><td class="c-name">UBS</td>
@@ -438,7 +439,7 @@
   <section class="section nd-reveal">
     <div class="container is-max-desktop">
       <h2 class="title is-3 has-text-centered">Qualitative Comparison</h2>
-      <img src="static/images/qualitative.jpg" alt="Qualitative comparison on static and dynamic scenes" style="width:100%;">
+      <img src="static/images/qualitative.jpg?v=20261015" alt="Qualitative comparison on static and dynamic scenes, with identical crop coordinates and magnification across methods" style="width:100%;">
       <p class="content has-text-justified" style="margin-top:.8rem;">
         Static and dynamic scenes. <span class="mname"><em>d</em>GS</span> shows noticeably fewer artifacts than N-DGS
         on static scenes. On dynamic scenes, <span class="mname"><em>d</em>GS</span> and
